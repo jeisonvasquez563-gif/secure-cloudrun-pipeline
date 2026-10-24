@@ -1,0 +1,70 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# One deploy at a time; a newer push waits instead of racing the current one.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # OIDC token: used for Workload Identity Federation and keyless signing
+
+env:
+  IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.AR_REPOSITORY }}/app
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    environment: production # lets you add required reviewers in repo settings
+    steps:
+      - uses: actions/checkout@v4
+
+      # No long-lived JSON keys: GitHub's OIDC token is exchanged for short-lived credentials.
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+
+      - uses: sigstore/cosign-installer@v3
+
+      # Signs the immutable digest (not a mutable tag) using the workflow's OIDC identity.
+      - name: Sign image (keyless)
+        run: cosign sign --yes "${{ env.IMAGE }}@${{ steps.build.outputs.digest }}"
+
+      # Deploys by digest so the running revision is exactly the image that was built and signed.
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ vars.CLOUD_RUN_SERVICE }}
+          region: ${{ vars.GCP_REGION }}
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          env_vars: APP_VERSION=${{ github.sha }}
+
+      - name: Smoke test
+        run: curl --fail --silent --show-error --retry 5 --retry-delay 3 "${{ steps.deploy.outputs.url }}/healthz"
