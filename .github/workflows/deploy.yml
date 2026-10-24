@@ -12,6 +12,7 @@ concurrency:
 
 permissions:
   contents: read
+  pull-requests: read # needed so the reusable CI workflow's secret-scan job can run
   id-token: write # OIDC token: used for Workload Identity Federation and keyless signing
 
 env:
