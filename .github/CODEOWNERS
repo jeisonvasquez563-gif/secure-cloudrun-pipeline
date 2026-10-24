@@ -1,0 +1,5 @@
+# Replace with your GitHub username. With branch protection ("Require review from Code Owners"),
+# changes to the pipeline and infrastructure need an explicit review.
+*                    @jeisonvasquez563-gif
+/.github/workflows/  @jeisonvasquez563-gif
+/infra/              @jeisonvasquez563-gif
