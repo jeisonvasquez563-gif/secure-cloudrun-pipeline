@@ -1,0 +1,13 @@
+.git
+.github
+infra
+docs
+tests
+**/__pycache__
+*.pyc
+.venv
+.env
+.env.*
+*.tfstate
+*.tfstate.*
+.terraform
