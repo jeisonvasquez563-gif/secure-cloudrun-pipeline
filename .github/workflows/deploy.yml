@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: production # lets you add required reviewers in repo settings
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # No long-lived JSON keys: GitHub's OIDC token is exchanged for short-lived credentials.
       - name: Authenticate to Google Cloud (Workload Identity Federation)
